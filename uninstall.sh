@@ -1,156 +1,223 @@
-#!/bin/sh -e
+#!/bin/bash
 
-# Define color codes using tput for better compatibility
-RC=$(tput sgr0)
-RED=$(tput setaf 1)
-YELLOW=$(tput setaf 3)
-GREEN=$(tput setaf 2)
+set -euo pipefail
 
-LINUXTOOLBOXDIR="$HOME/linuxtoolbox"
-PACKAGER=""
-SUDO_CMD=""
+readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly CONFIG_DIR="${HOME}/.config"
+readonly FONT_DIR="${HOME}/.local/share/fonts"
 
-print_colored() {
-    color=$1
-    message=$2
-    printf "${color}%s${RC}\n" "$message"
+# Color definitions
+readonly COLOR_RESET='\033[0m'
+readonly COLOR_RED='\033[31m'
+readonly COLOR_GREEN='\033[32m'
+readonly COLOR_YELLOW='\033[33m'
+readonly COLOR_BLUE='\033[34m'
+
+# Package lists
+readonly PACKAGES=(
+    'bash-completion'
+    'bat'
+    'tree'
+    'multitail'
+    'fastfetch'
+    'neovim'
+    'trash-cli'
+)
+
+# Global variables
+PACKAGE_MANAGER=""
+PRIVILEGE_CMD=""
+
+log() {
+    local level="$1"
+    local message="$2"
+    local color=""
+    
+    case "$level" in
+        "INFO")  color="$COLOR_BLUE" ;;
+        "WARN")  color="$COLOR_YELLOW" ;;
+        "ERROR") color="$COLOR_RED" ;;
+        "SUCCESS") color="$COLOR_GREEN" ;;
+        *) color="$COLOR_RESET" ;;
+    esac
+    
+    printf "${color}[%s]${COLOR_RESET} %s\n" "$level" "$message" >&2
 }
 
-command_exists() {
+check_command() {
     command -v "$1" >/dev/null 2>&1
 }
 
-determine_package_manager() {
-    PACKAGEMANAGER='nala apt dnf yum pacman zypper emerge xbps-install nix-env'
-    for pgm in $PACKAGEMANAGER; do
-        if command_exists "$pgm"; then
-            PACKAGER="$pgm"
-            printf "Using %s\n" "$pgm"
-            break
+detect_package_manager() {
+    local managers=("nala" "apt" "dnf" "yum" "pacman" "zypper" "emerge" "xbps-install" "nix-env")
+    
+    for manager in "${managers[@]}"; do
+        if check_command "$manager"; then
+            PACKAGE_MANAGER="$manager"
+            log "INFO" "Detected package manager: $manager"
+            return 0
         fi
     done
 
-    if [ -z "$PACKAGER" ]; then
-        print_colored "$RED" "Can't find a supported package manager"
+    log "ERROR" "No supported package manager found"
         exit 1
-    fi
 }
 
-determine_sudo_command() {
-    if command_exists sudo; then
-        SUDO_CMD="sudo"
-    elif command_exists doas && [ -f "/etc/doas.conf" ]; then
-        SUDO_CMD="doas"
+detect_privilege_escalation() {
+    if check_command "sudo"; then
+        PRIVILEGE_CMD="sudo"
+    elif check_command "doas" && [[ -f "/etc/doas.conf" ]]; then
+        PRIVILEGE_CMD="doas"
     else
-        SUDO_CMD="su -c"
+        PRIVILEGE_CMD="su -c"
     fi
 
-    printf "Using %s as privilege escalation software\n" "$SUDO_CMD"
+    log "INFO" "Using privilege escalation: $PRIVILEGE_CMD"
 }
 
-uninstall_dependencies() {
-    DEPENDENCIES='bash-completion bat tree multitail fastfetch neovim trash-cli'
-
-    print_colored "$YELLOW" "Uninstalling dependencies..."
-    if [ "$PACKAGER" = "pacman" ]; then
-        if command_exists yay; then
-            yay -Rns --noconfirm ${DEPENDENCIES}
-        elif command_exists paru; then
-            paru -Rns --noconfirm ${DEPENDENCIES}
+remove_packages() {
+    log "WARN" "Removing installed packages..."
+    
+    local packages_str="${PACKAGES[*]}"
+    
+    case "$PACKAGE_MANAGER" in
+        "pacman")
+            if check_command "yay"; then
+                yay -Rns --noconfirm $packages_str || true
+            elif check_command "paru"; then
+                paru -Rns --noconfirm $packages_str || true
         else
-            ${SUDO_CMD} pacman -Rns --noconfirm ${DEPENDENCIES}
+                $PRIVILEGE_CMD pacman -Rns --noconfirm $packages_str || true
         fi
-    elif [ "$PACKAGER" = "nala" ] || [ "$PACKAGER" = "apt" ]; then
-        ${SUDO_CMD} ${PACKAGER} purge -y ${DEPENDENCIES}
-    elif [ "$PACKAGER" = "emerge" ]; then
-        ${SUDO_CMD} ${PACKAGER} --deselect app-shells/bash-completion sys-apps/bat app-text/tree app-text/multitail app-misc/fastfetch app-editors/neovim app-misc/trash-cli
-    elif [ "$PACKAGER" = "xbps-install" ]; then
-        ${SUDO_CMD} xbps-remove -Ry ${DEPENDENCIES}
-    elif [ "$PACKAGER" = "nix-env" ]; then
-        ${SUDO_CMD} ${PACKAGER} -e bash-completion bat tree multitail fastfetch neovim trash-cli
-    elif [ "$PACKAGER" = "dnf" ] || [ "$PACKAGER" = "yum" ]; then
-        ${SUDO_CMD} ${PACKAGER} remove -y ${DEPENDENCIES}
-    else
-        ${SUDO_CMD} ${PACKAGER} remove -y ${DEPENDENCIES}
-    fi
-}
-
-uninstall_font() {
-    FONT_NAME="MesloLGS Nerd Font Mono"
-    FONT_DIR="$HOME/.local/share/fonts/$FONT_NAME"
+            ;;
+        "nala"|"apt")
+            $PRIVILEGE_CMD $PACKAGE_MANAGER purge -y $packages_str || true
+            ;;
+        "emerge")
+            local emerge_packages=(
+                "app-shells/bash-completion"
+                "sys-apps/bat"
+                "app-text/tree"
+                "app-text/multitail"
+                "app-misc/fastfetch"
+                "app-editors/neovim"
+                "app-misc/trash-cli"
+            )
+            $PRIVILEGE_CMD emerge --deselect "${emerge_packages[@]}" || true
+            ;;
+        "xbps-install")
+            $PRIVILEGE_CMD xbps-remove -Ry $packages_str || true
+            ;;
+        "nix-env")
+            $PRIVILEGE_CMD nix-env -e $packages_str || true
+            ;;
+        "dnf"|"yum")
+            $PRIVILEGE_CMD $PACKAGE_MANAGER remove -y $packages_str || true
+            ;;
+        *)
+            $PRIVILEGE_CMD $PACKAGE_MANAGER remove -y $packages_str || true
+            ;;
+    esac
     
-    if [ -d "$FONT_DIR" ]; then
-        print_colored "$YELLOW" "Removing font: $FONT_NAME"
-        rm -rf "$FONT_DIR"
-        fc-cache -fv
-        print_colored "$GREEN" "Font removed: $FONT_NAME"
+    log "SUCCESS" "Package removal completed"
+}
+
+remove_fonts() {
+    local font_name="MesloLGS Nerd Font Mono"
+    local font_path="$FONT_DIR/$font_name"
+    
+    if [[ -d "$font_path" ]]; then
+        log "WARN" "Removing font: $font_name"
+        rm -rf "$font_path"
+        
+        if check_command "fc-cache"; then
+            fc-cache -fv >/dev/null 2>&1
+    fi
+        
+        log "SUCCESS" "Font removed successfully"
     else
-        print_colored "$YELLOW" "Font not found: $FONT_NAME"
+        log "INFO" "Font directory not found: $font_name"
     fi
 }
 
-uninstall_starship_and_fzf() {
-    if command_exists starship; then
-        print_colored "$YELLOW" "Uninstalling Starship..."
-        ${SUDO_CMD} rm -f "$(command -v starship)"
-        print_colored "$GREEN" "Starship uninstalled"
+remove_external_tools() {
+    # Remove Starship
+    if check_command "starship"; then
+        log "WARN" "Removing Starship prompt..."
+        local starship_path
+        starship_path="$(command -v starship)"
+        $PRIVILEGE_CMD rm -f "$starship_path"
+        log "SUCCESS" "Starship removed"
     fi
 
-    if [ -d "$HOME/.fzf" ]; then
-        print_colored "$YELLOW" "Uninstalling fzf..."
-        "$HOME/.fzf/uninstall"
+    # Remove fzf
+    if [[ -d "$HOME/.fzf" ]]; then
+        log "WARN" "Removing fzf..."
+        if [[ -x "$HOME/.fzf/uninstall" ]]; then
+            "$HOME/.fzf/uninstall" --all >/dev/null 2>&1 || true
+    fi
         rm -rf "$HOME/.fzf"
-        print_colored "$GREEN" "fzf uninstalled"
+        log "SUCCESS" "fzf removed"
     fi
-}
-
-uninstall_zoxide() {
-    if command_exists zoxide; then
-        print_colored "$YELLOW" "Uninstalling Zoxide..."
-        ${SUDO_CMD} rm -f "$(command -v zoxide)"
-        print_colored "$GREEN" "Zoxide uninstalled"
-    fi
-}
-
-remove_configs() {
-    USER_HOME=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
     
-    print_colored "$YELLOW" "Removing configuration files..."
-    
-    # Remove .bashrc symlink and restore backup if it exists
-    if [ -L "$USER_HOME/.bashrc" ]; then
-        rm "$USER_HOME/.bashrc"
-        if [ -f "$USER_HOME/.bashrc.bak" ]; then
-            mv "$USER_HOME/.bashrc.bak" "$USER_HOME/.bashrc"
-            print_colored "$GREEN" "Restored original .bashrc"
+    # Remove Zoxide
+    if check_command "zoxide"; then
+        log "WARN" "Removing Zoxide..."
+        local zoxide_path
+        zoxide_path="$(command -v zoxide)"
+        $PRIVILEGE_CMD rm -f "$zoxide_path"
+        log "SUCCESS" "Zoxide removed"
         fi
-    fi
-    
-    # Remove starship config
-    rm -f "$USER_HOME/.config/starship.toml"
-    
-    # Remove fastfetch config
-    rm -f "$USER_HOME/.config/fastfetch/config.jsonc"
-    
-    print_colored "$GREEN" "Configuration files removed"
 }
 
-remove_linuxtoolbox() {
-    if [ -d "$LINUXTOOLBOXDIR" ]; then
-        print_colored "$YELLOW" "Removing linuxtoolbox directory..."
-        rm -rf "$LINUXTOOLBOXDIR"
-        print_colored "$GREEN" "linuxtoolbox directory removed"
+restore_configurations() {
+    local user_home
+    user_home="$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)"
+    
+    log "WARN" "Restoring configuration files..."
+    
+    # Restore .bashrc
+    if [[ -L "$user_home/.bashrc" ]]; then
+        rm "$user_home/.bashrc"
+        if [[ -f "$user_home/.bashrc.bak" ]]; then
+            mv "$user_home/.bashrc.bak" "$user_home/.bashrc"
+            log "SUCCESS" "Original .bashrc restored"
     fi
+    fi
+    
+    # Remove configuration files
+    local config_files=(
+        "$user_home/.config/starship.toml"
+        "$user_home/.config/fastfetch/config.jsonc"
+    )
+    
+    for config_file in "${config_files[@]}"; do
+        if [[ -f "$config_file" ]]; then
+            rm -f "$config_file"
+        fi
+    done
+    
+    log "SUCCESS" "Configuration restoration completed"
 }
 
-# Main execution
-determine_package_manager
-determine_sudo_command
-uninstall_dependencies
-uninstall_font
-uninstall_starship_and_fzf
-uninstall_zoxide
-remove_configs
-remove_linuxtoolbox
+cleanup_project_directory() {
+    log "INFO" "Project directory cleanup completed"
+    log "INFO" "You can manually remove the mybash directory if desired"
+}
 
-print_colored "$GREEN" "Uninstallation complete. Please restart your shell for changes to take effect."
+main() {
+    log "INFO" "Starting Linux Toolbox uninstallation..."
+    detect_package_manager
+    detect_privilege_escalation
+    
+    remove_packages
+    remove_fonts
+    remove_external_tools
+    restore_configurations
+    cleanup_project_directory
+    
+    log "SUCCESS" "Uninstallation completed successfully!"
+    log "INFO" "Please restart your shell or source your shell configuration to apply changes"
+}
+
+main "$@"

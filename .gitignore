@@ -20,12 +20,29 @@ Thumbs.db
 
 # Archives
 *.zip
+*.rar
+*.7z
 *.tar
+*.tgz
 *.tar.gz
+*.tar.bz2
 *.tar.xz
 
 # Env/local
 .env
 .env.*
 .direnv/
+
+# Backups
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+
+# Fonts
+*.ttf
+*.otf
+*.woff
+*.woff2
 

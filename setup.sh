@@ -3,7 +3,8 @@
 set -euo pipefail
 
 # Configuration
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly SCRIPT_DIR
 readonly CONFIG_DIR="${HOME}/.config"
 readonly FONT_DIR="${HOME}/.local/share/fonts"
 
@@ -40,9 +41,7 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-is_root() {
-    [ "$(id -u)" -eq 0 ]
-}
+ 
 
 get_user_home() {
     if [ -n "${SUDO_USER:-}" ]; then
@@ -100,13 +99,11 @@ validate_requirements() {
 
 validate_permissions() {
     if ! groups | grep -qE "(wheel|sudo|root)"; then
-        log_error "User must be in wheel, sudo, or root group"
-        return 1
+        log_warning "User not in wheel/sudo/root; operations may prompt for password."
     fi
 
     if [ ! -w "$SCRIPT_DIR" ]; then
-        log_error "No write permission to script directory: $SCRIPT_DIR"
-        return 1
+        log_warning "No write permission to script directory: $SCRIPT_DIR (continuing)"
     fi
     
     return 0
@@ -123,46 +120,46 @@ setup_directories() {
 
 # Installation functions
 install_packages() {
-    local packages="bash bash-completion tar bat tree multitail fastfetch wget unzip fontconfig"
+    local packages=(bash bash-completion tar bat tree multitail fastfetch wget unzip fontconfig)
     if ! command_exists nvim; then
-        packages="$packages neovim"
-        fi
+        packages+=(neovim)
+    fi
     if ! command_exists trash; then
-        packages="$packages trash-cli"
-        fi
+        packages+=(trash-cli)
+    fi
     
-    log_info "Installing packages: $packages"
+    log_info "Installing packages: ${packages[*]}"
     
     case "$PACKAGE_MANAGER" in
         pacman)
-            install_arch_packages "$packages"
+            $PRIVILEGE_CMD pacman -Syu --needed --noconfirm "${packages[@]}"
             ;;
         nala|apt)
-            $PRIVILEGE_CMD $PACKAGE_MANAGER update
-            $PRIVILEGE_CMD $PACKAGE_MANAGER install -y $packages
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" update
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
             ;;
         dnf|yum)
-            $PRIVILEGE_CMD $PACKAGE_MANAGER install -y $packages
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
             ;;
         emerge)
-            local emerge_packages="app-shells/bash app-shells/bash-completion app-arch/tar sys-apps/bat app-text/tree app-text/multitail app-misc/fastfetch app-misc/trash-cli"
+            local emerge_packages=(app-shells/bash-completion app-arch/tar sys-apps/bat app-text/tree app-text/multitail app-misc/fastfetch app-misc/trash-cli)
             if ! command_exists nvim; then
-                emerge_packages="$emerge_packages app-editors/neovim"
-    fi
-            $PRIVILEGE_CMD $PACKAGE_MANAGER -v $emerge_packages
+                emerge_packages+=(app-editors/neovim)
+            fi
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" -v --noreplace "${emerge_packages[@]}"
             ;;
         xbps-install)
-            $PRIVILEGE_CMD $PACKAGE_MANAGER -Sy $packages
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" -Sy "${packages[@]}"
             ;;
         nix-env)
-            local nix_packages="nixos.bash nixos.bash-completion nixos.gnutar nixos.bat nixos.tree nixos.multitail nixos.fastfetch nixos.trash-cli"
+            local nix_packages=(nixpkgs.bash nixpkgs.bash-completion nixpkgs.gnutar nixpkgs.bat nixpkgs.tree nixpkgs.multitail nixpkgs.fastfetch nixpkgs.trash-cli)
             if ! command_exists nvim; then
-                nix_packages="$nix_packages nixos.neovim"
-        fi
-            $PRIVILEGE_CMD $PACKAGE_MANAGER -iA $nix_packages
+                nix_packages+=(nixpkgs.neovim)
+            fi
+            nix-env -iA "${nix_packages[@]}"
             ;;
         zypper)
-            $PRIVILEGE_CMD $PACKAGE_MANAGER install -y $packages
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
             ;;
         *)
             log_error "Unsupported package manager: $PACKAGE_MANAGER"
@@ -171,33 +168,7 @@ install_packages() {
     esac
 }
 
-install_arch_packages() {
-    local packages="$1"
-    local aur_helper=""
-    
-    # Install AUR helper if needed
-    if command_exists yay; then
-        aur_helper="yay"
-    elif command_exists paru; then
-        aur_helper="paru"
-    else
-        log_info "Installing yay AUR helper..."
-        $PRIVILEGE_CMD pacman -S --needed --noconfirm base-devel git
-        
-        local temp_dir
-        temp_dir=$(mktemp -d)
-        cd "$temp_dir"
-        git clone https://aur.archlinux.org/yay.git
-        cd yay
-        makepkg -si --noconfirm
-        cd "$MYBASH_DIR"
-        rm -rf "$temp_dir"
-        aur_helper="yay"
-    fi
-    
-    log_info "Installing packages with $aur_helper..."
-    $aur_helper -S --needed --noconfirm $packages
-}
+ 
 
 install_nerd_font() {
     local font_name="MesloLGS Nerd Font"
@@ -299,8 +270,8 @@ setup_bash_config() {
     local bash_profile="$user_home/.bash_profile"
     local starship_config="$user_home/.config/starship.toml"
     
-    # Backup existing bashrc
-    if [ -f "$bashrc" ]; then
+    # Backup existing bashrc if it's a regular file and not a symlink
+    if [ -f "$bashrc" ] && [ ! -L "$bashrc" ]; then
         log_info "Backing up existing .bashrc"
         mv "$bashrc" "$bashrc.backup.$(date +%Y%m%d_%H%M%S)"
     fi
@@ -310,8 +281,14 @@ setup_bash_config() {
         ln -sf "$SCRIPT_DIR/.bashrc" "$bashrc"
         log_success "Bashrc configuration linked"
     else
-        log_error "Bashrc template not found"
-        return 1
+        log_warning "Bashrc template not found; creating a minimal .bashrc"
+        cat > "$bashrc" << 'EOF'
+# Minimal .bashrc created by mybash setup
+export PATH="$HOME/.local/bin:$PATH"
+if command -v starship >/dev/null 2>&1; then
+    eval "$(starship init bash)"
+fi
+EOF
     fi
     
     if [ -f "$SCRIPT_DIR/starship.toml" ]; then

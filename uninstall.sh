@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly CONFIG_DIR="${HOME}/.config"
-readonly FONT_DIR="${HOME}/.local/share/fonts"
+# Configuration (remove unused to satisfy shellcheck)
+FONT_DIR="${HOME}/.local/share/fonts"
+readonly FONT_DIR
 
 # Color definitions
 readonly COLOR_RESET='\033[0m'
@@ -78,20 +78,21 @@ detect_privilege_escalation() {
 remove_packages() {
     log "WARN" "Removing installed packages..."
     
-    local packages_str="${PACKAGES[*]}"
+    local packages_str
+    packages_str=("${PACKAGES[@]}")
     
     case "$PACKAGE_MANAGER" in
         "pacman")
             if check_command "yay"; then
-                yay -Rns --noconfirm $packages_str || true
+                yay -Rns --noconfirm "${packages_str[@]}" || true
             elif check_command "paru"; then
-                paru -Rns --noconfirm $packages_str || true
-        else
-                $PRIVILEGE_CMD pacman -Rns --noconfirm $packages_str || true
-        fi
+                paru -Rns --noconfirm "${packages_str[@]}" || true
+            else
+                $PRIVILEGE_CMD pacman -Rns --noconfirm "${packages_str[@]}" || true
+            fi
             ;;
         "nala"|"apt")
-            $PRIVILEGE_CMD $PACKAGE_MANAGER purge -y $packages_str || true
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" purge -y "${packages_str[@]}" || true
             ;;
         "emerge")
             local emerge_packages=(
@@ -106,16 +107,16 @@ remove_packages() {
             $PRIVILEGE_CMD emerge --deselect "${emerge_packages[@]}" || true
             ;;
         "xbps-install")
-            $PRIVILEGE_CMD xbps-remove -Ry $packages_str || true
+            $PRIVILEGE_CMD xbps-remove -Ry "${packages_str[@]}" || true
             ;;
         "nix-env")
-            $PRIVILEGE_CMD nix-env -e $packages_str || true
+            $PRIVILEGE_CMD nix-env -e "${packages_str[@]}" || true
             ;;
         "dnf"|"yum")
-            $PRIVILEGE_CMD $PACKAGE_MANAGER remove -y $packages_str || true
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" remove -y "${packages_str[@]}" || true
             ;;
         *)
-            $PRIVILEGE_CMD $PACKAGE_MANAGER remove -y $packages_str || true
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" remove -y "${packages_str[@]}" || true
             ;;
     esac
     

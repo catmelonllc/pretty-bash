@@ -2,6 +2,7 @@
 
 # Check if running interactively
 [[ $- != *i* ]] && return
+
 #######################################################
 # INITIALIZATION
 #######################################################
@@ -40,6 +41,7 @@ bind "set show-all-if-ambiguous on" 2>/dev/null
 
 # Allow Ctrl+S for forward history search
 stty -ixon 2>/dev/null
+
 #######################################################
 # HISTORY CONFIGURATION
 #######################################################
@@ -49,6 +51,7 @@ export HISTFILESIZE=20000
 export HISTTIMEFORMAT="%F %T "
 export HISTCONTROL="erasedups:ignoredups:ignorespace"
 export PROMPT_COMMAND="history -a"
+
 #######################################################
 # ENVIRONMENT VARIABLES
 #######################################################
@@ -75,6 +78,7 @@ export LESS_TERMCAP_us=$'\e[1;32m'
 
 # PATH additions
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
 #######################################################
 # UTILITY FUNCTIONS
 #######################################################
@@ -177,32 +181,43 @@ myip() {
     echo "External IP:"
     curl -s ifconfig.me || echo "Unable to fetch"
 }
+# Quick commit
+gcom() {
+    git add . && git commit -m "$1"
+}
+
+# Lazy git (add, commit, push)
+lazy() {
+    git add . && git commit -m "$1" && git push
+}
+
 #######################################################
-# ALIASES - SYSTEM
+# ALIASES - NAVIGATION
 #######################################################
 
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+alias ..1='cd ..'
+alias ..2='cd ../..'
+alias ..3='cd ../../..'
 alias ~='cd ~'
+#######################################################
+# ALIASES - SYSTEM
+#######################################################
+
 alias c='clear'
 alias h='history'
 alias j='jobs -l'
 alias path='echo -e ${PATH//:/\\n}'
 alias now='date +"%T"'
 alias nowdate='date +"%d-%m-%Y"'
-
+alias reload='source ~/.bashrc'
+alias please='sudo $(fc -ln -1)'
+alias pathadd='export PATH="$PWD:$PATH" && echo $PATH'
 #######################################################
 # ALIASES - FILE OPERATIONS
 #######################################################
-
-alias ls='ls --color=auto -F'
-alias ll='ls -alF'
-alias la='ls -A'
-alias l='ls -1F'
-alias lt='ls -ltr'
-alias lh='ls -lh'
-alias tree='tree -C'
 
 alias cp='cp -i'
 alias mv='mv -i'
@@ -212,17 +227,14 @@ alias mkdir='mkdir -pv'
 # Safe alternatives
 command -v trash >/dev/null 2>&1 && alias rm='trash'
 
-#######################################################
-# ALIASES - TEXT PROCESSING
-#######################################################
-
-alias grep='grep --color=auto'
-alias fgrep='fgrep --color=auto'
-alias egrep='egrep --color=auto'
-
-# Use modern alternatives if available
-command -v rg >/dev/null 2>&1 && alias grep='rg'
-command -v bat >/dev/null 2>&1 && alias cat='bat'
+# Default ls aliases
+alias ls='ls --color=auto -F'
+alias ll='ls -alF'
+alias la='ls -A'
+alias l='ls -1F'
+alias lt='ls -ltr'
+alias lh='ls -lh'
+alias tree='tree -C'
 
 # Prefer eza (or exa) or lsd for icons and organized output
 if command -v eza >/dev/null 2>&1; then
@@ -246,48 +258,23 @@ elif command -v lsd >/dev/null 2>&1; then
 fi
 
 #######################################################
-# EXTRA USEFUL ALIASES
+# ALIASES - TEXT PROCESSING
 #######################################################
 
-# Navigation
-alias ..1='cd ..'
-alias ..2='cd ../..'
-alias ..3='cd ../../..'
+alias grep='grep --color=auto'
+alias fgrep='fgrep --color=auto'
+alias egrep='egrep --color=auto'
 
-# Quick reload
-alias reload='source ~/.bashrc'
+# Use modern alternatives if available
+command -v rg >/dev/null 2>&1 && alias grep='rg'
+command -v bat >/dev/null 2>&1 && alias cat='bat'
 
-# Git helpers
-alias ggraph='git log --graph --decorate --oneline --all'
-alias gst='git status -sb'
-alias gco='git checkout'
-alias gb='git branch --all'
-alias gclean='git fetch -p && git branch --merged | egrep -v "(^\*|main|master|dev)" | xargs -r git branch -d'
+#######################################################
+# ALIASES - ARCHIVES
+#######################################################
 
-# Docker helpers
-alias dcu='docker compose up -d'
-alias dcd='docker compose down'
-alias dcb='docker compose build'
-alias dcl='docker compose logs -f'
-
-# Networking
-alias iplocal="hostname -I | awk '{print $1}'"
-alias ippublic='curl -s https://ifconfig.me'
-
-# Quick servers
-alias serve='python3 -m http.server 8000'
-alias servep='python3 -m http.server 8000 --bind 127.0.0.1'
-
-# Archives
 alias untar='tar -xvf'
 alias targz='tar -czvf'
-
-# System
-alias please='sudo $(fc -ln -1)'
-alias pathadd='export PATH="$PWD:$PATH" && echo $PATH'
-
-# Animation toggles
-
 
 #######################################################
 # ALIASES - SYSTEM MONITORING
@@ -343,16 +330,11 @@ alias gc='git commit'
 alias gp='git push'
 alias gl='git log --oneline'
 alias gd='git diff'
-
-# Quick commit
-gcom() {
-    git add . && git commit -m "$1"
-}
-
-# Lazy git (add, commit, push)
-lazy() {
-    git add . && git commit -m "$1" && git push
-}
+alias ggraph='git log --graph --decorate --oneline --all'
+alias gst='git status -sb'
+alias gco='git checkout'
+alias gb='git branch --all'
+alias gclean='git fetch -p && git branch --merged | egrep -v "(^\*|main|master|dev)" | xargs -r git branch -d'
 
 #######################################################
 # ALIASES - DOCKER
@@ -363,6 +345,10 @@ alias dc='docker-compose'
 alias dps='docker ps'
 alias di='docker images'
 alias dclean='docker system prune -af'
+alias dcu='docker compose up -d'
+alias dcd='docker compose down'
+alias dcb='docker compose build'
+alias dcl='docker compose logs -f'
 
 #######################################################
 # ALIASES - NETWORKING
@@ -371,6 +357,15 @@ alias dclean='docker system prune -af'
 alias ping='ping -c 5'
 alias wget='wget -c'
 alias curl='curl -L'
+alias iplocal="hostname -I | awk '{print $1}'"
+alias ippublic='curl -s https://ifconfig.me'
+
+#######################################################
+# ALIASES - SERVERS
+#######################################################
+
+alias serve='python3 -m http.server 8000'
+alias servep='python3 -m http.server 8000 --bind 127.0.0.1'
 
 #######################################################
 # CUSTOM KEYBINDINGS
@@ -395,5 +390,7 @@ command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init bash)"
 
 # Auto-start X11 on tty1
 if [[ -z "$DISPLAY" ]] && [[ "$(tty)" = "/dev/tty1" ]]; then
-exec startx
+    exec startx
 fi
+
+. "$HOME/.local/share/../bin/env"

@@ -2,24 +2,32 @@
 
 set -euo pipefail
 
-# Configuration
+#==============================================================================
+# CONFIGURATION
+#==============================================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly CONFIG_DIR="${HOME}/.config"
 readonly FONT_DIR="${HOME}/.local/share/fonts"
 
-# Colors
+#==============================================================================
+# COLORS
+#==============================================================================
 readonly RED='\033[0;31m'
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
-# Global variables
+#==============================================================================
+# GLOBAL VARIABLES
+#==============================================================================
 PACKAGE_MANAGER=""
 PRIVILEGE_CMD=""
 
-# Logging functions
+#==============================================================================
+# LOGGING FUNCTIONS
+#==============================================================================
 log_info() {
     printf "${BLUE}[INFO]${NC} %s\n" "$1"
 }
@@ -36,12 +44,12 @@ log_error() {
     printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
 }
 
-# Utility functions
+#==============================================================================
+# UTILITY FUNCTIONS
+#==============================================================================
 command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
-
- 
 
 get_user_home() {
     if [ -n "${SUDO_USER:-}" ]; then
@@ -51,7 +59,9 @@ get_user_home() {
     fi
 }
 
-# System detection
+#==============================================================================
+# SYSTEM DETECTION
+#==============================================================================
 detect_package_manager() {
     local managers="nala apt dnf yum pacman zypper emerge xbps-install nix-env"
     
@@ -78,7 +88,9 @@ detect_privilege_escalation() {
     log_info "Using privilege escalation: $PRIVILEGE_CMD"
 }
 
-# Validation functions
+#==============================================================================
+# VALIDATION FUNCTIONS
+#==============================================================================
 validate_requirements() {
     local requirements="curl git"
     local missing=""
@@ -109,7 +121,9 @@ validate_permissions() {
     return 0
 }
 
-# Setup functions
+#==============================================================================
+# SETUP FUNCTIONS
+#==============================================================================
 setup_directories() {
     log_info "Setting up directories..."
     
@@ -118,7 +132,9 @@ setup_directories() {
     log_info "Working from current directory: $SCRIPT_DIR"
 }
 
-# Installation functions
+#==============================================================================
+# INSTALLATION FUNCTIONS
+#==============================================================================
 install_packages() {
     local packages=(bash bash-completion tar bat tree multitail fastfetch wget unzip fontconfig)
     if ! command_exists nvim; then
@@ -168,8 +184,6 @@ install_packages() {
     esac
 }
 
- 
-
 install_nerd_font() {
     local font_name="MesloLGS Nerd Font"
     
@@ -177,6 +191,7 @@ install_nerd_font() {
         log_info "Nerd font already installed"
         return 0
 fi
+    
     log_info "Installing $font_name..."
     
     local font_url="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Meslo.zip"
@@ -246,7 +261,54 @@ install_zoxide() {
     fi
 }
 
-# Configuration functions
+install_matugen() {
+    if command_exists matugen; then
+        log_info "Matugen already installed"
+        return 0
+    fi
+    
+    log_info "Installing Matugen for Material You theming..."
+    
+    # Try to install via cargo first (most reliable method)
+    if command_exists cargo; then
+        if cargo install matugen; then
+            log_success "Matugen installed via cargo"
+            return 0
+        fi
+    fi
+    
+    # Fallback to binary installation
+    local arch
+    arch=$(uname -m)
+    local os="linux"
+    local binary_name="matugen"
+    
+    case "$arch" in
+        x86_64) arch="x86_64" ;;
+        aarch64|arm64) arch="aarch64" ;;
+        *) 
+            log_warning "Unsupported architecture for matugen binary: $arch"
+            return 1
+            ;;
+    esac
+    
+    local download_url="https://github.com/InioX/matugen/releases/latest/download/matugen-${os}-${arch}"
+    local install_dir="$HOME/.local/bin"
+    
+    mkdir -p "$install_dir"
+    
+    if wget -q "$download_url" -O "$install_dir/matugen"; then
+        chmod +x "$install_dir/matugen"
+        log_success "Matugen installed successfully"
+    else
+        log_error "Failed to install Matugen"
+        return 1
+    fi
+}
+
+#==============================================================================
+# CONFIGURATION FUNCTIONS
+#==============================================================================
 setup_fastfetch_config() {
     local user_home
     user_home=$(get_user_home)
@@ -310,7 +372,39 @@ EOF
     fi
 }
 
-# Main execution
+cleanup_project_files() {
+    log_info "Cleaning up project files..."
+    
+    # Remove git directory
+    if [ -d "$SCRIPT_DIR/.git" ]; then
+        rm -rf "$SCRIPT_DIR/.git"
+        log_success "Removed .git directory"
+    fi
+    
+    # Remove vscode directory
+    if [ -d "$SCRIPT_DIR/.vscode" ]; then
+        rm -rf "$SCRIPT_DIR/.vscode"
+        log_success "Removed .vscode directory"
+    fi
+    
+    # Remove gitignore file
+    if [ -f "$SCRIPT_DIR/.gitignore" ]; then
+        rm -f "$SCRIPT_DIR/.gitignore"
+        log_success "Removed .gitignore file"
+    fi
+    
+    # Remove README file
+    if [ -f "$SCRIPT_DIR/README.md" ]; then
+        rm -f "$SCRIPT_DIR/README.md"
+        log_success "Removed README.md file"
+    fi
+    
+    log_success "Project cleanup completed"
+}
+
+#==============================================================================
+# MAIN EXECUTION
+#==============================================================================
 main() {
     log_info "Starting Linux Toolbox setup..."
     
@@ -331,10 +425,14 @@ main() {
     install_starship || exit 1
     install_fzf || exit 1
     install_zoxide || exit 1
+    install_matugen
     
     # Configuration phase
     setup_fastfetch_config
     setup_bash_config || exit 1
+    
+    # Cleanup phase
+    cleanup_project_files
     
     log_success "Setup completed successfully!"
     log_info "Please restart your shell or run 'source ~/.bashrc' to apply changes"

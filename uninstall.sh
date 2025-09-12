@@ -2,18 +2,24 @@
 
 set -euo pipefail
 
-# Configuration (remove unused to satisfy shellcheck)
+#==============================================================================
+# CONFIGURATION
+#==============================================================================
 FONT_DIR="${HOME}/.local/share/fonts"
 readonly FONT_DIR
 
-# Color definitions
+#==============================================================================
+# COLOR DEFINITIONS
+#==============================================================================
 readonly COLOR_RESET='\033[0m'
 readonly COLOR_RED='\033[31m'
 readonly COLOR_GREEN='\033[32m'
 readonly COLOR_YELLOW='\033[33m'
 readonly COLOR_BLUE='\033[34m'
 
-# Package lists
+#==============================================================================
+# PACKAGE LISTS
+#==============================================================================
 readonly PACKAGES=(
     'bash-completion'
     'bat'
@@ -24,9 +30,15 @@ readonly PACKAGES=(
     'trash-cli'
 )
 
-# Global variables
+#==============================================================================
+# GLOBAL VARIABLES
+#==============================================================================
 PACKAGE_MANAGER=""
 PRIVILEGE_CMD=""
+
+#==============================================================================
+# UTILITY FUNCTIONS
+#==============================================================================
 
 log() {
     local level="$1"
@@ -47,6 +59,10 @@ log() {
 check_command() {
     command -v "$1" >/dev/null 2>&1
 }
+
+#==============================================================================
+# DETECTION FUNCTIONS
+#==============================================================================
 
 detect_package_manager() {
     local managers=("nala" "apt" "dnf" "yum" "pacman" "zypper" "emerge" "xbps-install" "nix-env")
@@ -74,6 +90,10 @@ detect_privilege_escalation() {
 
     log "INFO" "Using privilege escalation: $PRIVILEGE_CMD"
 }
+
+#==============================================================================
+# REMOVAL FUNCTIONS
+#==============================================================================
 
 remove_packages() {
     log "WARN" "Removing installed packages..."
@@ -168,8 +188,21 @@ remove_external_tools() {
         zoxide_path="$(command -v zoxide)"
         $PRIVILEGE_CMD rm -f "$zoxide_path"
         log "SUCCESS" "Zoxide removed"
-        fi
+    fi
+    
+    # Remove Matugen
+    if check_command "matugen"; then
+        log "WARN" "Removing Matugen..."
+        local matugen_path
+        matugen_path="$(command -v matugen)"
+        rm -f "$matugen_path"
+        log "SUCCESS" "Matugen removed"
+    fi
 }
+
+#==============================================================================
+# RESTORATION FUNCTIONS
+#==============================================================================
 
 restore_configurations() {
     local user_home
@@ -201,10 +234,18 @@ restore_configurations() {
     log "SUCCESS" "Configuration restoration completed"
 }
 
+#==============================================================================
+# CLEANUP FUNCTIONS
+#==============================================================================
+
 cleanup_project_directory() {
     log "INFO" "Project directory cleanup completed"
     log "INFO" "You can manually remove the mybash directory if desired"
 }
+
+#==============================================================================
+# MAIN FUNCTION
+#==============================================================================
 
 main() {
     log "INFO" "Starting Linux Toolbox uninstallation..."

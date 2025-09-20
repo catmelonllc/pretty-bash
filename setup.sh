@@ -281,7 +281,6 @@ install_matugen() {
     local arch
     arch=$(uname -m)
     local os="linux"
-    local binary_name="matugen"
     
     case "$arch" in
         x86_64) arch="x86_64" ;;

@@ -1,5 +1,8 @@
 # Enhanced Bash Configuration
 
+# FOR THE DEV TO READ! 
+fastfetch and 1 other package didnt exist in debian 12 repos. it gives the OPTION to skip installing neofetch (and it still works!)
+
 ## Overview
 
 A comprehensive `.bashrc` configuration with modern terminal enhancements for Unix-like systems. This setup provides powerful aliases, custom functions, an enhanced prompt, and integrated tools to significantly improve your terminal productivity and experience.

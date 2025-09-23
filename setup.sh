@@ -60,6 +60,20 @@ get_user_home() {
 }
 
 #==============================================================================
+# *** NEW: ROBUST PRIVILEGE ESCALATION HANDLER ***
+#==============================================================================
+run_privileged() {
+    if [[ "$PRIVILEGE_CMD" == "su -c" ]]; then
+        # su -c requires the entire command as a single string argument
+        su -c "$*"
+    else
+        # sudo and doas take arguments normally
+        $PRIVILEGE_CMD "$@"
+    fi
+}
+
+
+#==============================================================================
 # SYSTEM DETECTION
 #==============================================================================
 detect_package_manager() {
@@ -144,38 +158,47 @@ install_packages() {
         packages+=(trash-cli)
     fi
     
-    log_info "Installing packages: ${packages[*]}"
+    log_info "Installing packages..."
     
     case "$PACKAGE_MANAGER" in
         pacman)
-            $PRIVILEGE_CMD pacman -Syu --needed --noconfirm "${packages[@]}"
+            run_privileged pacman -Syu --needed --noconfirm "${packages[@]}"
             ;;
         nala|apt)
-            # Remove fastfetch from the main list to handle it separately
-            local apt_packages=("${packages[@]/fastfetch}")
+            # *** START OF FIX ***
+            # 1. Correctly build a filtered array without 'fastfetch'.
+            local apt_packages=()
+            for pkg in "${packages[@]}"; do
+                if [[ "$pkg" != "fastfetch" ]]; then
+                    apt_packages+=("$pkg")
+                fi
+            done
 
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" update
-            # Install the essential packages. If these fail, the script should stop.
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${apt_packages[@]}"
+            # 2. Use the robust run_privileged helper for all commands.
+            run_privileged "$PACKAGE_MANAGER" update
+            log_info "Installing essential packages: ${apt_packages[*]}"
+            run_privileged "$PACKAGE_MANAGER" install -y "${apt_packages[@]}"
 
             # Now, TRY to install fastfetch, but continue if it fails.
             log_info "Attempting to install optional package: fastfetch"
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y fastfetch || log_warning "fastfetch not found in repositories. Skipping."
+            run_privileged "$PACKAGE_MANAGER" install -y fastfetch || log_warning "fastfetch not found in repositories. Skipping."
+            # *** END OF FIX ***
             ;;
         dnf|yum)
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
+            run_privileged "$PACKAGE_MANAGER" install -y "${packages[@]}"
             ;;
         emerge)
             local emerge_packages=(app-shells/bash-completion app-arch/tar sys-apps/bat app-text/tree app-text/multitail app-misc/fastfetch app-misc/trash-cli)
             if ! command_exists nvim; then
                 emerge_packages+=(app-editors/neovim)
             fi
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" -v --noreplace "${emerge_packages[@]}"
+            run_privileged "$PACKAGE_MANAGER" -v --noreplace "${emerge_packages[@]}"
             ;;
         xbps-install)
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" -Sy "${packages[@]}"
+            run_privileged "$PACKAGE_MANAGER" -Sy "${packages[@]}"
             ;;
         nix-env)
+            # nix-env doesn't need privileges
             local nix_packages=(nixpkgs.bash nixpkgs.bash-completion nixpkgs.gnutar nixpkgs.bat nixpkgs.tree nixpkgs.multitail nixpkgs.fastfetch nixpkgs.trash-cli)
             if ! command_exists nvim; then
                 nix_packages+=(nixpkgs.neovim)
@@ -183,7 +206,7 @@ install_packages() {
             nix-env -iA "${nix_packages[@]}"
             ;;
         zypper)
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
+            run_privileged "$PACKAGE_MANAGER" install -y "${packages[@]}"
             ;;
         *)
             log_error "Unsupported package manager: $PACKAGE_MANAGER"

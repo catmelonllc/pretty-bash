@@ -151,8 +151,16 @@ install_packages() {
             $PRIVILEGE_CMD pacman -Syu --needed --noconfirm "${packages[@]}"
             ;;
         nala|apt)
+            # Remove fastfetch from the main list to handle it separately
+            local apt_packages=("${packages[@]/fastfetch}")
+
             $PRIVILEGE_CMD "$PACKAGE_MANAGER" update
-            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
+            # Install the essential packages. If these fail, the script should stop.
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${apt_packages[@]}"
+
+            # Now, TRY to install fastfetch, but continue if it fails.
+            log_info "Attempting to install optional package: fastfetch"
+            $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y fastfetch || log_warning "fastfetch not found in repositories. Skipping."
             ;;
         dnf|yum)
             $PRIVILEGE_CMD "$PACKAGE_MANAGER" install -y "${packages[@]}"
@@ -267,13 +275,16 @@ install_matugen() {
         return 0
     fi
     
-    log_info "Installing Matugen for Material You theming..."
+    log_info "Attempting to install optional package: Matugen..."
     
     # Try to install via cargo first (most reliable method)
     if command_exists cargo; then
-        if cargo install matugen; then
-            log_success "Matugen installed via cargo"
+        # Hide cargo's output unless it fails, to keep the log clean
+        if cargo install matugen &>/dev/null; then
+            log_success "Matugen installed successfully via cargo"
             return 0
+        else
+            log_info "Cargo installation failed, trying binary download..."
         fi
     fi
     
@@ -286,8 +297,9 @@ install_matugen() {
         x86_64) arch="x86_64" ;;
         aarch64|arm64) arch="aarch64" ;;
         *) 
-            log_warning "Unsupported architecture for matugen binary: $arch"
-            return 1
+            # This is not a fatal error, just warn and exit successfully.
+            log_warning "Unsupported architecture for matugen binary: $arch. Skipping."
+            return 0
             ;;
     esac
     
@@ -298,17 +310,26 @@ install_matugen() {
     
     if wget -q "$download_url" -O "$install_dir/matugen"; then
         chmod +x "$install_dir/matugen"
-        log_success "Matugen installed successfully"
+        log_success "Matugen installed successfully from binary"
     else
-        log_error "Failed to install Matugen"
-        return 1
+        # This is also not a fatal error.
+        log_warning "Failed to download matugen binary. Skipping."
     fi
+
+    # Always return 0 to ensure the script does not stop
+    return 0
 }
 
 #==============================================================================
 # CONFIGURATION FUNCTIONS
 #==============================================================================
 setup_fastfetch_config() {
+    # First, check if fastfetch was actually installed before trying to configure it.
+    if ! command_exists fastfetch; then
+        log_warning "fastfetch is not installed. Skipping configuration."
+        return 0 # Exit the function successfully without doing anything.
+    fi
+
     local user_home
     user_home=$(get_user_home)
     local fastfetch_dir="$user_home/.config/fastfetch"

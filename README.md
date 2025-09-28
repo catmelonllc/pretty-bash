@@ -135,3 +135,4 @@ Contributions are welcome! Please feel free to:
 ## License
 
 This project is under the unlicense Feel free to use, modify, and distribute as needed.
+(tip if you have debian 12 and dont have fastfetch. you can add neofetch to the end of your .bashrc and it will do the same :)

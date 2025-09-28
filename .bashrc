@@ -392,5 +392,3 @@ command -v zoxide >/dev/null 2>&1 && eval "$(zoxide init bash)"
 if [[ -z "$DISPLAY" ]] && [[ "$(tty)" = "/dev/tty1" ]]; then
     exec startx
 fi
-
-. "$HOME/.local/share/../bin/env"

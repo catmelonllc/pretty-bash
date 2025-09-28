@@ -1,7 +1,7 @@
 # Enhanced Bash Configuration
  
 fastfetch and 1 other package didnt exist in debian 12 repos. it gives the OPTION to skip installing fastfetch (and it still works!) photo below
-[bash](https://copyparty.blahaj.dedyn.io/images/IMG_3434.jpeg)
+![bash](https://copyparty.blahaj.dedyn.io/images/IMG_3434.jpeg)
 
 ## Overview
 

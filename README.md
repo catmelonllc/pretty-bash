@@ -25,8 +25,8 @@ A comprehensive `.bashrc` configuration with modern terminal enhancements for Un
 To install the `.bashrc` configuration, execute the following commands in your terminal:
 
 ```sh
-git clone --depth=1 https://github.com/dacrab/mybash.git
-cd mybash
+git clone https://github.com/catmelonllc/pretty-bash.git
+cd pretty-bash
 ./setup.sh
 ```
 
@@ -45,7 +45,7 @@ The `setup.sh` script automates the installation process by:
 To uninstall the `.bashrc` configuration, run:
 
 ```sh
-cd mybash
+cd pretty-bash
 ./uninstall.sh
 ```
 
@@ -134,4 +134,4 @@ Contributions are welcome! Please feel free to:
 
 ## License
 
-This project is open source. Feel free to use, modify, and distribute as needed.
+This project is under the unlicense Feel free to use, modify, and distribute as needed.
